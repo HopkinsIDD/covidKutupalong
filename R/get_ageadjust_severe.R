@@ -53,7 +53,7 @@ get_age_pop <- function(country){
         filter(tolower(country_clean) == tolower(country)) %>% filter(year==max(year))
 
     # print for a double check
-    print(pop_data$location)
+   # print(pop_data$location)
     pop_data <- pop_data[,-(1:4)] %>% select(-country_clean)
     dat <- as.numeric(pop_data)
     names(dat) <- colnames(pop_data)
@@ -61,6 +61,16 @@ get_age_pop <- function(country){
 }
 
 
+
+#  Country population age distributions
+get_p_age <- function(country="China"){
+    nage_ <- get_age_pop(country) * 1000
+    nage_[8] <- sum(nage_[8:11])
+    nage_ <- nage_[1:8]
+    pr_age10_ <- nage_ / sum(nage_)
+    return(pr_age10_)
+}
+    
 
 
 
@@ -75,12 +85,8 @@ get_p_severe <- function(country="China"){
     # Load prob(severe | age) from shenzhen
     prob <- read_csv("data/severe_age_prob.csv")
 
-
     #  population by age
-    nage_ <- get_age_pop(country) * 1000
-    nage_[8] <- sum(nage_[8:11])
-    nage_ <- nage_[1:8]
-    pr_age10_ <- nage_ / sum(nage_)
+    pr_age10_ <- suppressMessages(get_p_age(country=country))
 
     p_severe_tmp <- prob
     for(i in 1:nrow(prob)){

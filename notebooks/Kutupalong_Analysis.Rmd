@@ -36,8 +36,8 @@ knitr::opts_chunk$set(echo=TRUE)
 
 ```{r include=FALSE, message = F, warning = F, results = F}
 source("R/DataLoadUtils.r")
-source("R/BasicEpiAnalyses.r")
-source("R/DataUtils.r")
+#source("R/BasicEpiAnalyses.r")
+#source("R/DataUtils.r")
 source("R/model_functions.R")
 source("R/StochasticSEIR.R")
 source("R/CalcHospDeaths.R")
@@ -49,7 +49,7 @@ source("R/get_ageadjust_severe.R")
 ```{r}
 
 project <- "Kutupalong"
-dir.create(file.path("results",project), recursive = TRUE, showWarnings = FALSE)
+dir.create(file.path("output",project), recursive = TRUE, showWarnings = FALSE)
 dir.create(file.path("figures",project), recursive = TRUE, showWarnings = FALSE)
 
 
@@ -161,7 +161,6 @@ ggplot(p_data, aes(x=Location, y=p_severe, fill=factor(col_), colour=factor(col_
 
 ```
 
-Based on this crude analysis, if we assume 75% of infections in those 70+ lead to hospitalization, and the odds of hospitalization given infection by age mirrors the odds of mortality by age, we find that the hospitalization rate in Kutupalong is likely to be between 4.9-9.2%, compared with 14.0-21.8% in China. From these estimates, it is reasonable to assume infections in Kutupalong are 35-43% as likely to result in a hositalization, as compared to China.
 
 
 
