@@ -48,6 +48,9 @@ source("R/get_ageadjust_severe.R")
 
 ```{r}
 
+#res_date <- paste0(month.abb[lubridate::month(Sys.Date())],lubridate::day(Sys.Date()))
+res_date <- "May3"
+rerun <- FALSE
 project <- "Kutupalong"
 dir.create(file.path("output",project), recursive = TRUE, showWarnings = FALSE)
 dir.create(file.path("figures",project), recursive = TRUE, showWarnings = FALSE)
@@ -72,6 +75,7 @@ We will use bayesian methods to estimate the proportion severe by age, using dat
 # Run Stan Model to estimate probability severe by age
 #prop_severe_ests <- get_severe_age_shenzhen( )
 severe_age_prob <- read_csv("data/severe_age_prob.csv")
+
 
 
 ```
@@ -130,14 +134,23 @@ pr_age <- pr_age %>% mutate(age10 = floor(age/10)*10)
 pr_age10 <- pr_age %>% group_by(age10) %>% summarise(pr10 = sum(prop)) %>%
     mutate(age = paste0(age10, "-", age10+9))
 pr_age10_kutupalong <- as.numeric(pr_age10$pr10)
-pr_age10_kutupalong[8] <- sum(pr_age10_kutupalong[8:9])
-pr_age10_kutupalong <- pr_age10_kutupalong[-9]
+# pr_age10_kutupalong[8] <- sum(pr_age10_kutupalong[8:9])
+# pr_age10_kutupalong <- pr_age10_kutupalong[-9]
 names(pr_age10_kutupalong) <- 0:(length(pr_age10_kutupalong)-1)
 
 
 # Estimate the proportion severe in the camp
 p_severe_kutupalong <- get_p_severe_pop(pr_age10_kutupalong)
+dir.create(file.path("results", project), recursive = TRUE)
 save(p_severe_kutupalong, file=file.path("results", project, "p_severe_kutupalong.RData"))
+
+# load("data/raw_age_estimates.rda") # loads raw_age_estimate
+# param_age_dist <- readRDS("data/param-age-dist.rds")
+# names(param_age_dist[[1]])
+# param_age_dist[[5]]$param_to_est
+# p_mat_ <- param_age_dist[[5]]$pred_mtx
+
+
 
 
 
@@ -182,7 +195,7 @@ quantile(r0, c(0.025, .975))
 ```{r}
 
 # Simulation specifics   ----------------------------------------------
-n.sims <- 50 # simulations per R
+n.sims <- 100 # simulations per R
 n.Rs <- 20
 run_time <- 550
 start_date_="2020-03-15"
@@ -224,10 +237,6 @@ betas_mid <- R0_mid   * gamma / n_Icomp
 betas_high <- R0_high * gamma / n_Icomp
 
 
-
-
-
-
 # Hospitalization   ----------------------------------------------
 
 
@@ -239,12 +248,27 @@ betas_high <- R0_high * gamma / n_Icomp
 
 #p_hosp  <- c(p_severe_kutupalong, p_hosp_kutupalong_high)
 p_death <- .1
-p_ICU   <- 0.264
+p_ICU   <- 0.32 # Wuhan
 p_vent  <- 0.15
 
-time_hosp_pars = c(1.23, 0.79)
+time_hosp_pars = c(log(7), 0.3)
 time_death_pars = c(log(11.25), log(1.15))
 time_disch_pars = c(log(11.5), log(1.22)) 
+time_ICU_pars = c(log(3), 0.3)
+time_ICUdur_pars = c(log(8), 0.2)
+
+p_hosp=p_severe_kutupalong
+p_hosp_type="gamma"
+time_hosp_pars = c(1.23, 0.79)
+time_ICU_pars = c(log(10.5), log((10.5-7)/1.35))
+time_vent_pars = c(log(10.5), log((10.5-8)/1.35))
+time_death_pars = c(log(11.25), log(1.15))
+time_disch_pars = c(log(11.5), log(1.22))
+time_ICUdur_pars = c(log(16), log(2.96))
+end_date = "2022-01-01"
+length_geoid = 5
+cores=4
+run_parallel=TRUE
 
 ```
 
@@ -255,7 +279,7 @@ time_disch_pars = c(log(11.5), log(1.22))
 ### Run the model 
 We can do this locally or on a cluster if needed.
 
-```{r}
+```{r eval=rerun}
 
 betas <- betas_low
 sim_res <- run_seir_model_parallel(project, n.sims=n.sims, N=N, betas=betas, R0_val="low",
@@ -281,12 +305,8 @@ sim_res <- run_seir_model_parallel(project, n.sims=n.sims, N=N, betas=betas, R0_
 
    
 ### Low Beta
-```{r, echo=FALSE}
+```{r, echo=FALSE, eval=rerun}
 load(file=file.path("results", project, "p_severe_kutupalong.RData")) # p_severe_kutupalong
-
-#res_date <- paste0(month.abb[lubridate::month(Sys.Date())],lubridate::day(Sys.Date()))
-res_date <- "Mar19"
-
 
 R0_val <- "low"
 sim_res <- read_csv(file.path("results", project, paste0("sim_res_nohosp_", R0_val,"-",res_date,".csv")))
@@ -300,18 +320,22 @@ sim_res <- sim_res %>%
 
 # Get Hospitalizations
 sim_hospdeath <- build_hospdeath_par(
-                            data=sim_res, p_hosp=p_severe_kutupalong, 
-                            p_death, p_vent, p_ICU, p_hosp_type="gamma",
-                            time_hosp_pars = c(1.23, 0.79), 
-                            time_ICU_pars = c(log(10.5), log((10.5-7)/1.35)),
-                            time_vent_pars = c(log(10.5), log((10.5-8)/1.35)),
-                            time_death_pars = c(log(11.25), log(1.15)), 
-                            time_disch_pars = c(log(11.5), log(1.22)),
-                            time_ICUdur_pars = c(log(16), log(2.96)),
-                            end_date = "2022-01-01",
-                            length_geoid = 5,
-                            cores=4, 
-                            run_parallel=TRUE)
+                            data=sim_res, 
+                            p_hosp=p_severe_kutupalong, 
+                            p_death, 
+                            p_vent, 
+                            p_ICU, 
+                            p_hosp_type=p_hosp_type,
+                            time_hosp_pars = time_hosp_pars, 
+                            time_ICU_pars = time_ICU_pars,
+                            time_vent_pars = time_vent_pars,
+                            time_death_pars = time_death_pars, 
+                            time_disch_pars = time_disch_pars,
+                            time_ICUdur_pars = time_ICUdur_pars,
+                            end_date = end_date,
+                            length_geoid = length_geoid,
+                            cores=cores, 
+                            run_parallel=run_parallel)
 colnames(sim_hospdeath)
 
 
@@ -349,11 +373,8 @@ write_csv(sim_res_full, file.path("results", project, paste0("sim_res_low_", res
     
     
 ### Mid Beta
-```{r, echo=FALSE}
+```{r, echo=FALSE, eval=rerun}
 load(file=file.path("results", project, "p_severe_kutupalong.RData")) # p_severe_kutupalong
-
-#res_date <- paste0(month.abb[lubridate::month(Sys.Date())],lubridate::day(Sys.Date()))
-res_date <- "Mar19"
 
 
 R0_val <- "mid"
@@ -368,18 +389,22 @@ sim_res <- sim_res %>%
 
 # Get Hospitalizations
 sim_hospdeath <- build_hospdeath_par(
-                            data=sim_res, p_hosp=p_severe_kutupalong, 
-                            p_death, p_vent, p_ICU, p_hosp_type="gamma",
-                            time_hosp_pars = c(1.23, 0.79), 
-                            time_ICU_pars = c(log(10.5), log((10.5-7)/1.35)),
-                            time_vent_pars = c(log(10.5), log((10.5-8)/1.35)),
-                            time_death_pars = c(log(11.25), log(1.15)), 
-                            time_disch_pars = c(log(11.5), log(1.22)),
-                            time_ICUdur_pars = c(log(16), log(2.96)),
-                            end_date = "2022-01-01",
-                            length_geoid = 5,
-                            cores=4, 
-                            run_parallel=TRUE)
+                            data=sim_res, 
+                            p_hosp=p_severe_kutupalong, 
+                            p_death, 
+                            p_vent, 
+                            p_ICU, 
+                            p_hosp_type=p_hosp_type,
+                            time_hosp_pars = time_hosp_pars, 
+                            time_ICU_pars = time_ICU_pars,
+                            time_vent_pars = time_vent_pars,
+                            time_death_pars = time_death_pars, 
+                            time_disch_pars = time_disch_pars,
+                            time_ICUdur_pars = time_ICUdur_pars,
+                            end_date = end_date,
+                            length_geoid = length_geoid,
+                            cores=cores, 
+                            run_parallel=run_parallel)
 colnames(sim_hospdeath)
 
 
@@ -417,37 +442,35 @@ write_csv(sim_res_full,
 
 
 ### High Beta
-```{r, echo=FALSE}
+```{r, echo=FALSE, eval=rerun}
 load(file=file.path("results", project, "p_severe_kutupalong.RData")) # p_severe_kutupalong
-
-#res_date <- paste0(month.abb[lubridate::month(Sys.Date())],lubridate::day(Sys.Date()))
-res_date <- "Mar19"
-
 
 R0_val <- "high"
 sim_res <- read_csv(file.path("results", project, paste0("sim_res_nohosp_", R0_val,"-",res_date,".csv")))
-
 
 sim_res <- sim_res %>%
     rename(time=date, incidI=incid) %>% 
     mutate(geoid = "KB_ES", sim_num=as.integer(sim_id)) %>%
     mutate(uid = paste0(geoid, "-", sim_num))
 
-
 # Get Hospitalizations
 sim_hospdeath <- build_hospdeath_par(
-                            data=sim_res, p_hosp=p_severe_kutupalong, 
-                            p_death, p_vent, p_ICU, p_hosp_type="gamma",
-                            time_hosp_pars = c(1.23, 0.79), 
-                            time_ICU_pars = c(log(10.5), log((10.5-7)/1.35)),
-                            time_vent_pars = c(log(10.5), log((10.5-8)/1.35)),
-                            time_death_pars = c(log(11.25), log(1.15)), 
-                            time_disch_pars = c(log(11.5), log(1.22)),
-                            time_ICUdur_pars = c(log(16), log(2.96)),
-                            end_date = "2022-01-01",
-                            length_geoid = 5,
-                            cores=4, 
-                            run_parallel=TRUE)
+                            data=sim_res, 
+                            p_hosp=p_severe_kutupalong, 
+                            p_death, 
+                            p_vent, 
+                            p_ICU, 
+                            p_hosp_type=p_hosp_type,
+                            time_hosp_pars = time_hosp_pars, 
+                            time_ICU_pars = time_ICU_pars,
+                            time_vent_pars = time_vent_pars,
+                            time_death_pars = time_death_pars, 
+                            time_disch_pars = time_disch_pars,
+                            time_ICUdur_pars = time_ICUdur_pars,
+                            end_date = end_date,
+                            length_geoid = length_geoid,
+                            cores=cores, 
+                            run_parallel=run_parallel)
 colnames(sim_hospdeath)
 
 
@@ -488,16 +511,19 @@ write_csv(sim_res_high,
 
 ### ~ Combine results
 
-```{r}
+```{r, eval=rerun}
 
 sim_res_high <- read_csv(file.path("results", project, paste0("sim_res_high_", res_date, ".csv")))
 sim_res_mid <- read_csv(file.path("results", project, paste0("sim_res_mid_", res_date, ".csv")))
 sim_res_low <- read_csv(file.path("results", project, paste0("sim_res_low_", res_date, ".csv")))
 
 
-sim_res <- full_join(full_join(sim_res_low %>% mutate(scenario="Low Transmission"),
-                               sim_res_mid %>% mutate(scenario="Moderate Transmission")),
-                               sim_res_high %>% mutate(scenario="High Transmission"))
+sim_res <- full_join(full_join(sim_res_low %>% 
+                                 mutate(scenario="Low Transmission", sim_num=as.integer(sim_num)), 
+                               sim_res_mid %>% 
+                                 mutate(scenario="Moderate Transmission", sim_num=as.integer(sim_num))),
+                               sim_res_high %>% 
+                                 mutate(scenario="High Transmission", sim_num=as.integer(sim_num)))
 sim_res$R <- sim_res$beta * n_Icomp / gamma
 sim_res <- sim_res %>% mutate(scenario = factor(scenario, levels=c("Low Transmission", "Moderate Transmission", "High Transmission"), ordered = TRUE))
 
@@ -987,20 +1013,20 @@ pincidhosp <- ggplot(data=sim_res_summ, aes(x=day)) +
     ylab("Daily hospitalizations") + xlab("Day") +
   ggtitle("Estimated daily hospitalizations")
 
-pincidhosp_vHubei <- ggplot(data=sim_res_summ, aes(x=day)) +
-    geom_line(aes(y=hosp_incid_mean, group=scenario, color=scenario)) + 
-    geom_ribbon(aes(ymin=hosp_incid_ll, ymax=hosp_incid_ul, group=scenario, fill=scenario), alpha=.3) + 
-    geom_line(data=hubei_cases, aes(x=(0:(nrow(hubei_cases)-1)+30), y=est_incid), 
-              color="grey50", alpha=.5, size=1.5) +
-    #scale_y_continuous(trans="log") +
-    theme_classic() + 
-        scale_color_brewer(palette = "Set1", direction = -1) +
-    scale_fill_brewer(palette = "Set1", direction = -1) +
-      geom_hline(yintercept = 340, col="red", linetype="dashed") +
-
-    theme(legend.position = "none") +
-    ylab("Daily hospitalizations") + xlab("Day") +
-  ggtitle("Estimated hospitalizations, Kutupalong-Balukhali refuge camp versus those observed in Hubei, China")
+# pincidhosp_vHubei <- ggplot(data=sim_res_summ, aes(x=day)) +
+#     geom_line(aes(y=hosp_incid_mean, group=scenario, color=scenario)) + 
+#     geom_ribbon(aes(ymin=hosp_incid_ll, ymax=hosp_incid_ul, group=scenario, fill=scenario), alpha=.3) + 
+#     geom_line(data=hubei_cases, aes(x=(0:(nrow(hubei_cases)-1)+30), y=est_incid), 
+#               color="grey50", alpha=.5, size=1.5) +
+#     #scale_y_continuous(trans="log") +
+#     theme_classic() + 
+#         scale_color_brewer(palette = "Set1", direction = -1) +
+#     scale_fill_brewer(palette = "Set1", direction = -1) +
+#       geom_hline(yintercept = 340, col="red", linetype="dashed") +
+# 
+#     theme(legend.position = "none") +
+#     ylab("Daily hospitalizations") + xlab("Day") +
+#   ggtitle("Estimated hospitalizations, Kutupalong-Balukhali refuge camp versus those observed in Hubei, China")
 
 pinciddeath <- ggplot(data=sim_res_summ, aes(x=day)) +
     geom_line(aes(y=death_incid_mean, group=scenario, color=scenario)) + 
@@ -1196,19 +1222,19 @@ ggsave(file.path("figures", project, "day_20th_case.png"), p_day20, width=8, hei
 ## DISCUSSION
     
 #### Hospitalization Rate       
-```{r}
-p_hosp_china_low
-p_hosp_kutupalong_low
-
-p_hosp_kutupalong_low /p_hosp_china_low
-
-p_hosp_china_high
-p_hosp_kutupalong_high
-
-p_hosp_kutupalong_high / p_hosp_china_high
-
-```
-
+# ```{r}
+# #p_hosp_china_low
+# p_hosp_kutupalong_low
+# 
+# #p_hosp_kutupalong_low /p_hosp_china_low
+# 
+# #p_hosp_china_high
+# p_hosp_kutupalong_high
+# 
+# #p_hosp_kutupalong_high / p_hosp_china_high
+# 
+# ```
+# 
 
 
 Cumulative cases before hospitalizations

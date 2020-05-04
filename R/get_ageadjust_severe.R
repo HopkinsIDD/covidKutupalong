@@ -115,14 +115,21 @@ get_p_severe <- function(country="China"){
 ##'
 ##' @param pr_age10 proportion of population in 10 year age bins
 ##'
-get_p_severe_pop <- function(pr_age10){
+get_p_severe_pop <- function(pr_age10, old_data=FALSE){
 
     # Load prob(severe | age) from shenzhen
-    prob <- read_csv("data/severe_age_prob.csv")
-
-    #  sum all proportion of age old than 70
-    pr_age10[8] <- sum(pr_age10[8:length(pr_age10)])
-
+    if (old_data){
+        prob <- read_csv("data/severe_age_prob.csv")
+    } else {
+        param_age_dist <- readRDS("data/param-age-dist.rds")
+        prob <- t(param_age_dist[[5]]$pred_mtx)
+    }
+        
+        
+    #  sum all proportion of age older than data
+    pr_age10[ncol(prob)] <- sum(pr_age10[ncol(prob):length(pr_age10)])
+    pr_age10 <- pr_age10[1:ncol(prob)]
+    
     p_severe_tmp <- prob
     for(i in 1:nrow(prob)){
         p_severe_tmp[i,] <- prob[i,] * pr_age10
