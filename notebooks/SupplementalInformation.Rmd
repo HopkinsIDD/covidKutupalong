@@ -151,7 +151,6 @@ p_severe_kutupalong <- get_p_severe_pop(pr_age10_kutupalong)
 dir.create(file.path("results", project), recursive = TRUE)
 save(p_severe_kutupalong, file=file.path("results", project, "p_severe_kutupalong.RData"))
 
-# load("data/raw_age_estimates.rda") # loads raw_age_estimate
 # param_age_dist <- readRDS("data/param-age-dist.rds")
 # names(param_age_dist[[1]])
 # param_age_dist[[5]]$param_to_est
