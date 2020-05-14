@@ -35,9 +35,6 @@ knitr::opts_chunk$set(echo=TRUE)
 
 
 ```{r include=FALSE, message = F, warning = F, results = F}
-source("R/DataLoadUtils.r")
-#source("R/BasicEpiAnalyses.r")
-#source("R/DataUtils.r")
 source("R/model_functions.R")
 source("R/StochasticSEIR.R")
 source("R/CalcHospDeaths.R")
