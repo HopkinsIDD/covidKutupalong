@@ -46,8 +46,8 @@ source("R/get_ageadjust_severe.R")
 ```{r}
 
 #res_date <- paste0(month.abb[lubridate::month(Sys.Date())],lubridate::day(Sys.Date()))
-res_date <- "May3"
-rerun <- FALSE
+res_date <- "May14"
+rerun <- TRUE
 project <- "Kutupalong"
 dir.create(file.path("output",project), recursive = TRUE, showWarnings = FALSE)
 dir.create(file.path("figures",project), recursive = TRUE, showWarnings = FALSE)
