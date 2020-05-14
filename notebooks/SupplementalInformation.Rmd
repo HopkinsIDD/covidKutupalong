@@ -1,7 +1,7 @@
 ---
 title: "Supplemental Information"
-author: "Shaun A. Truelove, Orit Abrahim, Chiara Altare, Andrew S. Azman, Paul Spiegel"
-date: "20 April 2020"
+author: "Shaun A. Truelove, Orit Abrahim, Chiara Altare, Stephen A. Lauer, Andrew S. Azman, Paul Spiegel"
+date: "May 2020"
 output:
   html_document:
     df_print: paged
@@ -53,6 +53,7 @@ source("R/get_ageadjust_severe.R")
 ```
 <br>
 
+
 # METHODS
 
 
@@ -60,11 +61,11 @@ source("R/get_ageadjust_severe.R")
 
 We used a stochachastic SEIR (*Susceptible, Exposed, Infected, Recovered*) model to simulate transmission in population. We assumed a population size of 600,000, similar to the estimated population of the camps that make up the Kutupalong-Balukhali Expansion Site in Cox's Bazar, Bangladesh. We chose to use only this population to limit assumptions needed about connectivity and mobility with other areas and to keep the modeled population as close to a closed population as possible. Furthermore the population size is relatively static and interaction with the broader population in Bangladesh is relatively limited. We assumed homogenous mixing and infection rates by age. Hospitalization, ICU admission, and death were estimated from the transmission model, and not explicitly included as states in the model (see *Severity* section below).
 
-Transmissmission was defined by the $R_0$ and serial interval. Time from exposure to development of symptoms was defined by the incubation period ($\sigma$).  To capture a Ehrlang-distributed infectious period, we used $k=3$ compartments for the infecteds ($I_1$, $I_2$, $I_3$). We assume transitions between compartments occur according to **Table S1**.
+Transmissmission was defined by the $R_0$ and serial interval. Time from exposure to development of symptoms was defined by the incubation period ($\sigma$).  To capture a Ehrlang-distributed infectious period, we used $k=3$ compartments for the infecteds ($I_1$, $I_2$, $I_3$). We assume transitions between compartments occur according to **S3 Table**.
 
 <br>
 
-`r paste0("**Table S2**. Model transitions and rate parameters used in the SEIR model.")`
+`r paste0("**S3 Table**. Model transitions and rate parameters used in the SEIR model.")`
 ```{r}
 tab_seir <- data.frame(Transition = c("$S \\longrightarrow E$", 
                                       "$E \\longrightarrow I_1$", 
@@ -90,51 +91,12 @@ knitr::kable(tab_seir, col.names = c("Transition", "Rate Parameter", "Unit")) %>
 
 In a setting such as a refugee setting we assumed hospitalization will be limited to those who most require it, specifically severe cases. We assumed all hospitalization capacity available will be shifted for responding to COVID-19 severe cases, and no hospitalization for purposes of isolation will be done. Under these assumptions, proportion of infections resulting in severe disease approximate the proportion that will require hospitalization.
 
-Age is currently the best defined predictor of severity due to SARS-CoV-2 infection, with severity increasing exponentially with increasing age. To estimate the age-adjusted severity, we used data for a population of COVID-19 cases and contacts from Shenzhen, China [@bi_epidemiology_2020]. These data include the numbers of severe cases by 10-year age group from a total population of 391 individuals. With these data, we used the *rstanarm* package in *R* to run a Bayesian binomial model to estimate the probability of severe disease given infection and uncertainty bounds for each age group[@noauthor_bayesian_nodate, @noauthor_r_nodate]. 
+Age is currently the best defined predictor of severity due to SARS-CoV-2 infection, with severity increasing exponentially with increasing age. To estimate the age-adjusted severity, we used data from a several studies of COVID-19 transmission and hospitalization [@daves_2020, @bi_epidemiology_2020, @dong_epidemiology_2020, @ferguson_report_2020, @cdcmmwr_severe_2020]. With these data, we used the *mgcv* package in *R* to fit a logistic generalized additive model with a cubic spline for age and a random effect for study to estimate the probability of severe disease given infection and uncertainty bounds for each age group [@wood_mgcv_2019, @r_project]. These methods and code are detailed as part of the [*covidSeverity* R package](https://github.com/HopkinsIDD/covidSeverity).
 
-Age distributions for countries were taken from the United Nations World Population Propects (https://population.un.org/wpp/) [@WPP]. We fit a spline to the reported age distribution for the Kutupalong-Balukhali Expansion Site (https://data2.unhcr.org/en/situations/myanmar_refugees) to estimate 10-year age proportions [@unhcr_data]. We used this population age distribution to weight the overall probability distribution of severity (Figure S3).
+Age distributions for countries were taken from the United Nations [World Population Propects](https://population.un.org/wpp/) [@WPP]. We fit a spline to the [reported age distribution](https://data2.unhcr.org/en/situations/myanmar_refugees) for the Kutupalong-Balukhali Expansion Site to estimate 10-year age proportions [@unhcr_data]. We used this population age distribution to weight the overall probability distribution of severity (**S2 Fig**).
 
-
-```{r, include=FALSE, echo=FALSE}
-
-severe_data <- data.frame(age_cat = 1:8,
-                          n = c(20,12,34,87,60,74,86,18),
-                          severe = c(0,0,0,1,5,7,20,2)) %>% 
-                          mutate(p_severe = round(severe/n,3))
-
-
-get_severe_age_shenzhen <- function(severe_data){
-    # Use stan
-    library(rstanarm)
-
-    t_prior <- student_t(df = 7, location = 0, scale = 2.5, autoscale = FALSE)
-    fit1 <- stan_glm(cbind(severe, n-severe) ~ age_cat, data = severe_data,
-                     family = binomial(link = "logit"),
-                     prior = t_prior, prior_intercept = t_prior,
-                     cores = 4, seed = 12345)
-
-    PPD <- posterior_predict(fit1)
-    prob <- PPD
-    for(i in 1:nrow(PPD)){
-        prob[i,] <- PPD[i,] / severe_data$n
-    }
-
-    write_csv(prob %>% as.data.frame(), "data/severe_age_prob.csv")
-    return(prob)
-}
-```
-
-
-```{r, eval=FALSE}
-
-# Calc p_severe
-severe_age_prob <- get_severe_age_shenzhen(severe_data)
-
-```
 
 ```{r}
-
-severe_age_prob <- read_csv("data/severe_age_prob.csv")
 
 # USA
 p_usa <- get_p_severe(country="United States of America")
@@ -148,19 +110,29 @@ p_chn <- get_p_severe(country="China")
 # Italy
 p_ita <- get_p_severe(country="Italy")
 
+# Switzerland
+p_che <- get_p_severe(country="Switzerland")
+
+
 p_data <- bind_rows(data.frame(Location = "USA", p_severe=p_usa$ests),
                     data.frame(Location = "China", p_severe=p_chn$ests),
                     data.frame(Location = "Bangladesh", p_severe=p_bgd$ests),
-                    data.frame(Location = "Italy", p_severe=p_ita$ests)) %>%
-  mutate(Location=factor(Location, levels=c("Bangladesh","China","USA","Italy"), ordered = TRUE))
+                    data.frame(Location = "Italy", p_severe=p_ita$ests),
+                    data.frame(Location = "Switzerland", p_severe=p_che$ests)) %>%
+  mutate(Location=factor(Location, levels=c("Bangladesh","China","USA","Switzerland","Italy"), ordered = TRUE))
+
+
 ```
 
+
 ```{r}
-# we have to fit the age data to 10-year age bins
+
 pop_age <- read_csv(file.path("data",project,"age_kutupalong.csv"))
 age_smooth <- smooth.spline(pop_age$mid, pop_age$tot_per_year)
 pr_age <- predict(age_smooth, data.frame(mid=0:89)) %>% as.data.frame()
-pr_age <- pr_age %>% rename(age=mid, prop=mid.1) %>% mutate(prop = prop / sum(pr_age$mid.1))
+pr_age <- pr_age %>% rename(age=mid, prop=mid.1) %>% 
+  mutate(n = prop * 600000,
+         prop = prop / sum(pr_age$mid.1))
 # plot(pr_age$age, pr_age$prop)
 # points(pop_age$mid, pop_age$tot_per_year, col="blue", pch=20)
 
@@ -169,13 +141,22 @@ pr_age <- pr_age %>% mutate(age10 = floor(age/10)*10)
 pr_age10 <- pr_age %>% group_by(age10) %>% summarise(pr10 = sum(prop)) %>%
     mutate(age = paste0(age10, "-", age10+9))
 pr_age10_kutupalong <- as.numeric(pr_age10$pr10)
-pr_age10_kutupalong[8] <- sum(pr_age10_kutupalong[8:9])
-pr_age10_kutupalong <- pr_age10_kutupalong[-9]
+# pr_age10_kutupalong[8] <- sum(pr_age10_kutupalong[8:9])
+# pr_age10_kutupalong <- pr_age10_kutupalong[-9]
 names(pr_age10_kutupalong) <- 0:(length(pr_age10_kutupalong)-1)
+
 
 # Estimate the proportion severe in the camp
 p_severe_kutupalong <- get_p_severe_pop(pr_age10_kutupalong)
-save(p_severe_kutupalong, file=file.path("output", project, "p_severe_kutupalong.RData"))
+dir.create(file.path("results", project), recursive = TRUE)
+save(p_severe_kutupalong, file=file.path("results", project, "p_severe_kutupalong.RData"))
+
+# load("data/raw_age_estimates.rda") # loads raw_age_estimate
+# param_age_dist <- readRDS("data/param-age-dist.rds")
+# names(param_age_dist[[1]])
+# param_age_dist[[5]]$param_to_est
+# p_mat_ <- param_age_dist[[5]]$pred_mtx
+
 ```
 
 
@@ -184,7 +165,9 @@ age_china <- get_p_age(country="China")
 age_bangladesh <- get_p_age(country="Bangladesh")
 
 age_group = names(age_china)
-age_group[8] <- "70-99"
+age_group[9] <- "80-99"
+#pr_age10_kutupalong[9] <- sum(pr_age10_kutupalong[9])
+pr_age10_kutupalong <- pr_age10_kutupalong[1:9]
 pr_age10 = data.frame(Age=age_group, 
                       `Kutupalong-Balukhali`=pr_age10_kutupalong,
                       Bangladesh = age_bangladesh,
@@ -202,9 +185,13 @@ plot_age <- ggplot(pr_age10, aes(x=Age, y=proportion, fill=Location)) +
 
 # Severity by age
 
-severe_age_prob_df <- data.frame(severe_age_prob) 
-colnames(severe_age_prob_df) <- age_group
-severe_age_prob_df <- severe_age_prob_df %>% pivot_longer(cols = everything(), names_to = "Age", values_to = "prob_severe")
+#param_age_dist <- readRDS("data/param-age-dist.rds")
+p_hosp_inf <- read_rds("data/p_hosp_inf.rds")
+
+
+severe_age_prob <- t(p_hosp_inf) %>% as_tibble()
+colnames(severe_age_prob) <- age_group
+severe_age_prob_df <- severe_age_prob %>% pivot_longer(cols = everything(), names_to = "Age", values_to = "prob_severe")
 
 plot_severe <- ggplot(severe_age_prob_df, aes(x=Age, y=prob_severe)) +
                   geom_boxplot(color="navyblue", fill="royalblue4") + 
@@ -221,10 +208,18 @@ gridExtra::grid.arrange(plot_age + ggtitle("A. Population age distribution"),
                         plot_severe + ggtitle("B. Probability of severe disease, given SARS-CoV-2 infection"), 
                         ncol=1, nrow=2, heights=c(2, 2))
 
-ggsave(file.path("figures", project, "age_severity.png"), 
-       width=10, height=10, dpi=900, units = "in")
+# ggsave(file.path("figures", project, "age_severity.png"), 
+#        width=10, height=10, dpi=900, units = "in")
 
-cap <- paste("**Figure S2.** (A) Age distribution comparison between Kutupalong-Balukhali Expansion Site, Bangladesh overall, and China, and (B) the estimated probability of severe disease given infection with SARS-CoV-2, by 10-year age group.")
+# tiff(file.path("figures", project, "S2_Fig.tif"), 
+#        width=10, height=10, res=600, units = "in")
+# gridExtra::grid.arrange(plot_age + ggtitle("A. Population age distribution"), 
+#                         plot_severe + ggtitle("B. Probability of severe disease, given SARS-CoV-2 infection"), 
+#                         ncol=1, nrow=2, heights=c(2, 2))
+# dev.off()
+
+
+cap <- paste("**S2 Fig.** (A) Age distribution comparison between Kutupalong-Balukhali Expansion Site, Bangladesh overall, and China, and (B) the estimated probability of severe disease given infection with SARS-CoV-2, by 10-year age group.")
 ```
 
 <br>
@@ -248,16 +243,30 @@ ggplot(p_data, aes(x=Location, y=p_severe, fill=factor(col_), colour=factor(col_
   scale_fill_manual(values=c("maroon", "goldenrod1")) +
   ylab("Proportion Severe") +
   theme(legend.position = "none")
- 
-cap <- paste("**Figure S3.** Comparison of the expected overall proportion of infections that will result in severe disease, as estimated through adjustment for population age distribution.")
+
+
+cap <- paste("**S3 Fig.** Comparison of the expected overall proportion of infections that will result in severe disease, as estimated through adjustment for population age distribution.")
 ```
 
 
+<!-- ```{r, warning=FALSE,message=FALSE} -->
+<!-- suppressMessages({ -->
+<!--   tiff(file.path("figures", project, "S3_Fig.tif"), width=10, height=6, res=600, units = "in") -->
+<!--   ggplot(p_data, aes(x=Location, y=p_severe, fill=factor(col_), colour=factor(col_))) + -->
+<!--     geom_boxplot() +  -->
+<!--     scale_color_manual(values=c("darkred", "goldenrod4")) + -->
+<!--     scale_fill_manual(values=c("maroon", "goldenrod1")) + -->
+<!--     ylab("Proportion Severe") + -->
+<!--     theme(legend.position = "none") -->
+<!--   dev.off() -->
+<!-- }) -->
+<!-- ``` -->
 
 
 
 
 
+<P style="page-break-before: always">
 
 # References
 

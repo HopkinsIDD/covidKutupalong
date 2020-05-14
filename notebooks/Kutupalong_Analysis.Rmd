@@ -125,7 +125,9 @@ Now we need to apply the population structure of Kutupalong to estimate proporti
 pop_age <- read_csv(file.path("data",project,"age_kutupalong.csv"))
 age_smooth <- smooth.spline(pop_age$mid, pop_age$tot_per_year)
 pr_age <- predict(age_smooth, data.frame(mid=0:89)) %>% as.data.frame()
-pr_age <- pr_age %>% rename(age=mid, prop=mid.1) %>% mutate(prop = prop / sum(pr_age$mid.1))
+pr_age <- pr_age %>% rename(age=mid, prop=mid.1) %>% 
+  mutate(n = prop * 600000,
+         prop = prop / sum(pr_age$mid.1))
 plot(pr_age$age, pr_age$prop)
 points(pop_age$mid, pop_age$tot_per_year, col="blue", pch=20)
 
@@ -174,6 +176,20 @@ ggplot(p_data, aes(x=Location, y=p_severe, fill=factor(col_), colour=factor(col_
 
 ```
 
+
+
+### Age and gender breakdown
+```{r}
+
+median(unlist(lapply(X=1:nrow(pr_age), FUN=function(x=X) rep(pr_age$age[x], round(pr_age$n[x])))))
+mean(unlist(lapply(X=1:nrow(pr_age), FUN=function(x=X) rep(pr_age$age[x], round(pr_age$n[x])))))
+sd(unlist(lapply(X=1:nrow(pr_age), FUN=function(x=X) rep(pr_age$age[x], round(pr_age$n[x])))))
+
+sum(pop_age$male, na.rm = TRUE)
+sum(pop_age$female, na.rm = TRUE)
+
+
+```
 
 
 
@@ -254,17 +270,15 @@ p_vent  <- 0.15
 time_hosp_pars = c(log(7), 0.3)
 time_death_pars = c(log(11.25), log(1.15))
 time_disch_pars = c(log(11.5), log(1.22)) 
-time_ICU_pars = c(log(3), 0.3)
+time_ICU_pars = c(log(8.25), log(2.2))
 time_ICUdur_pars = c(log(8), 0.2)
 
 p_hosp=p_severe_kutupalong
 p_hosp_type="gamma"
 time_hosp_pars = c(1.23, 0.79)
-time_ICU_pars = c(log(10.5), log((10.5-7)/1.35))
 time_vent_pars = c(log(10.5), log((10.5-8)/1.35))
 time_death_pars = c(log(11.25), log(1.15))
 time_disch_pars = c(log(11.5), log(1.22))
-time_ICUdur_pars = c(log(16), log(2.96))
 end_date = "2022-01-01"
 length_geoid = 5
 cores=4
@@ -737,8 +751,9 @@ sim_res_summ <- sim_res %>% group_by(scenario, day) %>%
 ```{r}
 
 sim_res_outbreaks <- sim_res %>% group_by(scenario, sim_beta) %>% 
-  mutate(sim_max = max(cum_cases, na.rm = TRUE)) %>%
-  filter(cum_cases >= 1000 ) 
+  mutate(sim_max = max(cum_cases, na.rm = TRUE)) %>% 
+  ungroup() %>%
+  filter(sim_max >= 1000 ) 
   
 sim_res_summ_outbreak <- sim_res_outbreaks %>% group_by(scenario, day) %>% 
   summarise(incid_mean = mean(incidI, na.rm=TRUE),
@@ -1082,6 +1097,10 @@ pcumdeath <- ggplot(data=sim_res_summ, aes(x=day)) +
 p_panel <- gridExtra::grid.arrange(pincid,pincidhosp,pinciddeath, nrow=3)
 ggsave(file.path("figures", project, "sim_res_panel.png"), p_panel, width=8, height=10, dpi=900, units = "in")
 
+tiff(file.path("figures", project, "sim_res_panel.tif"), p_panel, width=8, height=10, res=900, units = "in")
+plot(p_panel)
+dev.off()
+
 
 ```
 
@@ -1107,6 +1126,11 @@ pcurrhosp <- ggplot(data=sim_res_summ, aes(x=day)) +
 
 pcurrhosp
 ggsave(file.path("figures", project, "curr_hosp.png"), width=8, height=4, dpi=600, units = "in")
+
+tiff(file.path("figures", project, "curr_hosp.tif"), width=8, height=4, res=600, units = "in")
+plot(pcurrhosp)
+dev.off()
+
 
 ```
 

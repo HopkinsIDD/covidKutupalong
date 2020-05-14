@@ -63,10 +63,10 @@ get_age_pop <- function(country){
 
 
 #  Country population age distributions
-get_p_age <- function(country="China"){
+get_p_age <- function(country="China", nage=9){
     nage_ <- get_age_pop(country) * 1000
-    nage_[8] <- sum(nage_[8:11])
-    nage_ <- nage_[1:8]
+    nage_[nage] <- sum(nage_[nage:11])
+    nage_ <- nage_[1:nage]
     pr_age10_ <- nage_ / sum(nage_)
     return(pr_age10_)
 }
@@ -80,25 +80,35 @@ get_p_age <- function(country="China"){
 ##'
 ##' @param country country of interest
 ##'
-get_p_severe <- function(country="China"){
-
-    # Load prob(severe | age) from shenzhen
-    prob <- read_csv("data/severe_age_prob.csv")
+get_p_severe <- function(country="China", old_data=FALSE){
 
     #  population by age
     pr_age10_ <- suppressMessages(get_p_age(country=country))
-
-    p_severe_tmp <- prob
-    for(i in 1:nrow(prob)){
-        p_severe_tmp[i,] <- prob[i,] * pr_age10_
+    
+    
+    # Load prob(severe | age) from shenzhen
+    if (old_data){
+        prob <- read_csv("data/severe_age_prob.csv")
+        p_severe_tmp <- prob
+        for(i in 1:nrow(prob)){
+            p_severe_tmp[i,] <- prob[i,] * pr_age10_
+        }
+        p_severe_ <- rowSums(p_severe_tmp)
+        mean(p_severe_)
+        
+    } else {
+        # param_age_dist <- readRDS("data/param-age-dist.rds")
+        # p_severe_ <- pr_age10_ %*% param_age_dist[[5]]$pred_mtx %>% as.vector()
+        p_hosp_inf <- read_rds("data/p_hosp_inf.rds")
+        p_severe_ <- pr_age10_ %*% p_hosp_inf %>% as.vector()
     }
-    p_severe_ <- rowSums(p_severe_tmp)
+    
 
     fit_ <- fitdistrplus::fitdist(p_severe_, "gamma", "mle")
 
-
     p_severe_ <- list(ests = p_severe_,
                       mean=mean(p_severe_),
+                      median=median(p_severe_),
                       ll=quantile(p_severe_, .025),
                       ul=quantile(p_severe_, .975),
                       q25=quantile(p_severe_, .25),
@@ -121,12 +131,15 @@ get_p_severe_pop <- function(pr_age10, old_data=FALSE){
     if (old_data){
         prob <- read_csv("data/severe_age_prob.csv")
     } else {
-        param_age_dist <- readRDS("data/param-age-dist.rds")
-        prob <- t(param_age_dist[[5]]$pred_mtx)
+        p_hosp_inf <- read_rds("data/p_hosp_inf.rds")
+        prob <- t(p_hosp_inf)
+        # param_age_dist <- readRDS("data/param-age-dist.rds")
+        # prob <- t(param_age_dist[[5]]$pred_mtx)
     }
         
         
     #  sum all proportion of age older than data
+    
     pr_age10[ncol(prob)] <- sum(pr_age10[ncol(prob):length(pr_age10)])
     pr_age10 <- pr_age10[1:ncol(prob)]
     
